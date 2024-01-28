@@ -1,39 +1,50 @@
 import { Injectable } from '@nestjs/common';
-import {newUrlInput, url} from "./app.types";
-import {faker} from '@faker-js/faker'
+import { NewUrlInput, Url } from './app.types';
+import { generateShort, validateUrl } from './app.helpers';
+import { throwBadRequest, throwNotFound } from './app.errors';
 
 @Injectable()
 export class AppService {
+  private shortenedUrls: Url[] = [];
 
-  private shortenedUrls: url[] = []
+  getUrl(link: string, request: Request): any {
+    const url = this.shortenedUrls.find((url) => url.shortened === link);
+    if (!url) throwNotFound();
 
-  getUrl(link: string): any {
-    const url = this.shortenedUrls.find(url => url.shortened === link)
-    if (url) {
-      url.totalClicks++;
-      return {
-        url: url.original
-      }
-    }
-    return 'URL não encontrada'
+    console.log(request.headers);
+    url.totalClicks++;
+    return {
+      url: url.original,
+    };
   }
 
   getClicks(link: string): any {
-    const url = this.shortenedUrls.find(url => url.shortened === link)
-    if (url) {
-      return `Total de clicks na URL: ${url.totalClicks}`
-    }
-    return 'URL não encontrada'
+    const url: Url = this.shortenedUrls.find((url) => url.shortened === link);
+    if (!url) throwNotFound();
+
+    return `Total de clicks na URL: ${url.totalClicks}`;
   }
 
-  createUrl(body: newUrlInput): string {
-    const { original } = body
-    const newUrl = {
-      original,
-      shortened: faker.string.alphanumeric(6),
-      totalClicks: 0
+  async createUrl(body: NewUrlInput): Promise<string[]> {
+    const { original } = body;
+    const count = body.count || 1;
+
+    if (count > 10)
+      throwBadRequest('O limite de criação de múltiplas URLs é 10');
+
+    await validateUrl(original);
+
+    const newUrls: Url[] = [];
+
+    for (let i = 0; i < count; i++) {
+      const newUrl = {
+        original,
+        shortened: generateShort(this.shortenedUrls),
+        totalClicks: 0,
+      };
+      newUrls.push(newUrl);
     }
-    this.shortenedUrls.push(newUrl)
-    return `Your shortened URL is: localhost:3000/${newUrl.shortened}`
+    this.shortenedUrls.push(...newUrls);
+    return newUrls.map((url) => `http:\\localhost:3000\\${url.shortened}`);
   }
 }
